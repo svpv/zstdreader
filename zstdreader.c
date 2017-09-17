@@ -110,8 +110,7 @@ struct zstdreader {
     bool eof, err;
     size_t nextSize;
     int64_t contentSize;
-    size_t zfill;
-    size_t zpos;
+    ZSTD_inBuffer in;
     char zbuf[ZSTD_BLOCKSIZE_MAX + ZSTD_BLOCKHEADERSIZE];
 };
 
@@ -138,7 +137,8 @@ int zstdreader_open(struct zstdreader **zp, struct fda *fda, const char *err[2])
     z->eof = z->err = false;
     z->nextSize = nextSize;
     z->contentSize = contentSize;
-    z->zfill = z->zpos = 0;
+    z->in.src = z->zbuf;
+    z->in.size = z->in.pos = 0;
 
     *zp = z;
     return 1;
@@ -162,7 +162,7 @@ int zstdreader_reopen(struct zstdreader *z, struct fda *fda, const char *err[2])
     z->err = false;
 
     z->nextSize = nextSize;
-    z->zfill = z->zpos = 0;
+    z->in.size = z->in.pos = 0;
 
     return 1;
 }
@@ -173,6 +173,51 @@ void zstdreader_free(struct zstdreader *z)
 	return;
     ZSTD_freeDStream(z->ds);
     free(z);
+}
+
+ssize_t zstdreader_read(struct zstdreader *z, void *buf, size_t size, const char *err[2])
+{
+    if (z->err)
+	return ERRSTR("pending error"), -1;
+    if (z->eof)
+	return 0;
+    assert(size > 0);
+
+    size_t total = 0;
+
+    do {
+	// nextSize is the return value of ZSTD_decompressStream,
+	// 0 indicates EOF.
+	if (z->nextSize == 0) {
+	    z->eof = true;
+	    // There shouldn't be anything left in the buffer.
+	    assert(z->in.pos == z->in.size);
+	    return total;
+	}
+
+	// There must be something in zbuf.
+	if (z->in.pos == z->in.size) {
+	    size_t n = z->nextSize;
+	    if (n > sizeof z->zbuf) // XXX
+		n = sizeof z->zbuf;
+	    ssize_t ret = reada(z->fda, z->zbuf, n);
+	    if (ret < 0)
+		return ERRNO("read"), -(z->err = true);
+	    if (ret < n)
+		return ERRSTR("unexpected EOF"), -(z->err = true);
+	    z->in.size = n;
+	    z->in.pos = 0;
+	}
+
+	// Feed zbuf to the decompressor.
+	ZSTD_outBuffer out = { buf, size, 0 };
+	z->nextSize = ZSTD_decompressStream(z->ds, &out, &z->in);
+	if (ZSTD_isError(z->nextSize))
+	    return ERRZSTD("ZSTD_decompressStream", z->nextSize), -(z->err = true);
+	total += out.pos, buf += out.pos, size -= out.pos;
+    } while (size);
+
+    return total;
 }
 
 // ex:set ts=8 sts=4 sw=4 noet:
