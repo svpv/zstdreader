@@ -80,6 +80,7 @@ static ssize_t zstdreader_begin(struct fda *fda, ZSTD_DStream *ds,
 
     // The second call should get us to the first block size.
     size_t nextSize = zret;
+    assert(nextSize >= ZSTD_BLOCKHEADERSIZE);
     assert(ZSTD_FRAMEHEADERSIZE_MIN + nextSize <= ZSTD_FRAMEHEADERSIZE_MAX + ZSTD_BLOCKHEADERSIZE);
     if (n < ZSTD_FRAMEHEADERSIZE_MIN + nextSize)
 	return ERRSTR("unexpected EOF"), -1;
@@ -90,17 +91,40 @@ static ssize_t zstdreader_begin(struct fda *fda, ZSTD_DStream *ds,
 	return ERRZSTD("ZSTD_decompressStream", zret), -1;
     assert(in.pos == nextSize);
 
+    nextSize = zret;
+
     // See how many bytes have been read.
-    fda->cur += ZSTD_FRAMEHEADERSIZE_MIN + nextSize;
+    fda->cur += ZSTD_FRAMEHEADERSIZE_MIN + in.pos;
     if (fda->cur == fda->end)
 	fda->cur = fda->end = NULL;
 
-    unsigned long long csize = ZSTD_getFrameContentSize(buf,
-	    ZSTD_FRAMEHEADERSIZE_MIN + nextSize - ZSTD_BLOCKHEADERSIZE);
-    assert(csize != ZSTD_CONTENTSIZE_ERROR);
-    *contentSizep = csize == ZSTD_CONTENTSIZE_UNKNOWN ? -1 : csize;
+    int64_t contentSize = -1;
+    if (nextSize == 0)
+	contentSize = 0;
+    else {
+	size_t frameHeaderSize = ZSTD_FRAMEHEADERSIZE_MIN + in.pos - ZSTD_BLOCKHEADERSIZE;
+	unsigned long long csize = ZSTD_getFrameContentSize(buf, frameHeaderSize);
+	assert(csize != ZSTD_CONTENTSIZE_ERROR);
 
-    nextSize = zret;
+	if (csize != ZSTD_CONTENTSIZE_UNKNOWN) {
+	    if (csize > INT64_MAX)
+		return ERRSTR("invalid contentSize"), -1;
+	    contentSize = csize;
+	}
+	else {
+	    // Check the size of the first block.
+	    unsigned char *b = (unsigned char *) buf + frameHeaderSize;
+	    unsigned blockHeader = b[0] | (b[1] << 8) | (b[2] << 16);
+	    // Last_Block bit set, Block_Size = 0?
+	    if (blockHeader == 1) {
+		// Just requesting checksum?
+		assert(nextSize == 4);
+		contentSize = 0;
+	    }
+	}
+    }
+
+    *contentSizep = contentSize;
     return nextSize + 1;
 }
 
