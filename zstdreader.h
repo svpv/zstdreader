@@ -58,8 +58,10 @@ void zstdreader_free(struct zstdreader *z);
 ssize_t zstdreader_read(struct zstdreader *z, void *buf, size_t size, const char *err[2])
 			__attribute__((nonnull));
 
-// Returns the uncompressed size, or 0 if the size is not available.
-uint64_t zstdreader_contentSize(struct zstdreader *z) __attribute__((nonnull));
+// Returns the uncompressed size, -1 if the size is unknown, 0 for an
+// empty frame (the first read is to return 0).  No error is possible,
+// since the size is actually determined at the open/reopen stage.
+int64_t zstdreader_contentSize(struct zstdreader *z) __attribute__((nonnull));
 
 #ifdef __cplusplus
 }

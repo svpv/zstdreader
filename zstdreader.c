@@ -220,4 +220,9 @@ ssize_t zstdreader_read(struct zstdreader *z, void *buf, size_t size, const char
     return total;
 }
 
+int64_t zstdreader_contentSize(struct zstdreader *z)
+{
+    return z->contentSize;
+}
+
 // ex:set ts=8 sts=4 sw=4 noet:
