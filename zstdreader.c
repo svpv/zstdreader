@@ -134,7 +134,8 @@ int zstdreader_open(struct zstdreader **zp, struct fda *fda, const char *err[2])
 
     z->fda = fda;
     z->ds = ds;
-    z->eof = z->err = false;
+    z->eof = nextSize == 0;
+    z->err = false;
     z->nextSize = nextSize;
     z->contentSize = contentSize;
     z->in.src = z->zbuf;
@@ -159,6 +160,7 @@ int zstdreader_reopen(struct zstdreader *z, struct fda *fda, const char *err[2])
 	return z->eof = true, +(z->err = false);
     nextSize--;
 
+    z->eof = nextSize == 0;
     z->err = false;
 
     z->nextSize = nextSize;
@@ -186,15 +188,6 @@ ssize_t zstdreader_read(struct zstdreader *z, void *buf, size_t size, const char
     size_t total = 0;
 
     do {
-	// nextSize is the return value of ZSTD_decompressStream,
-	// 0 indicates EOF.
-	if (z->nextSize == 0) {
-	    z->eof = true;
-	    // There shouldn't be anything left in the buffer.
-	    assert(z->in.pos == z->in.size);
-	    return total;
-	}
-
 	// There must be something in zbuf.
 	if (z->in.pos == z->in.size) {
 	    size_t n = z->nextSize;
@@ -215,6 +208,13 @@ ssize_t zstdreader_read(struct zstdreader *z, void *buf, size_t size, const char
 	if (ZSTD_isError(z->nextSize))
 	    return ERRZSTD("ZSTD_decompressStream", z->nextSize), -(z->err = true);
 	total += out.pos, buf += out.pos, size -= out.pos;
+
+	if (z->nextSize == 0) {
+	    z->eof = true;
+	    // There shouldn't be anything left in the buffer.
+	    assert(z->in.pos == z->in.size);
+	    break;
+	}
     } while (size);
 
     return total;
