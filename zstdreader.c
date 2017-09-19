@@ -215,8 +215,8 @@ ssize_t zstdreader_read(struct zstdreader *z, void *buf, size_t size, const char
 	// There must be something in zbuf.
 	if (z->in.pos == z->in.size) {
 	    size_t n = z->nextSize;
-	    if (n > sizeof z->zbuf) // XXX
-		n = sizeof z->zbuf;
+	    if (n > sizeof z->zbuf) // Probably an error, but leave it
+		n = sizeof z->zbuf; // up to the zstd library to handle.
 	    ssize_t ret = reada(z->fda, z->zbuf, n);
 	    if (ret < 0)
 		return ERRNO("read"), -(z->err = true);
