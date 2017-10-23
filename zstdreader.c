@@ -231,7 +231,8 @@ ssize_t zstdreader_read(struct zstdreader *z, void *buf, size_t size, const char
 	z->nextSize = ZSTD_decompressStream(z->ds, &out, &z->in);
 	if (ZSTD_isError(z->nextSize))
 	    return ERRZSTD("ZSTD_decompressStream", z->nextSize), -(z->err = true);
-	total += out.pos, buf += out.pos, size -= out.pos;
+	buf = (char *) buf + out.pos, size -= out.pos;
+	total += out.pos;
 
 	if (z->nextSize == 0) {
 	    z->eof = true;
