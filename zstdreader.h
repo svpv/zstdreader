@@ -18,8 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-#ifndef ZSTDREADER_H
-#define ZSTDREADER_H
+#pragma once
 
 #include <stdint.h>
 #include <sys/types.h> // ssize_t
@@ -65,5 +64,4 @@ int64_t zstdreader_contentSize(struct zstdreader *z) __attribute__((nonnull));
 
 #ifdef __cplusplus
 }
-#endif
 #endif
