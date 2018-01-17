@@ -95,8 +95,6 @@ static ssize_t zstdreader_begin(struct fda *fda, ZSTD_DStream *ds,
 
     // See how many bytes have been read.
     fda->cur += ZSTD_FRAMEHEADERSIZE_MIN + in.pos;
-    if (fda->cur == fda->end)
-	fda->cur = fda->end = NULL;
 
     int64_t contentSize = -1;
     if (nextSize == 0)
