@@ -23,6 +23,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include <assert.h>
+#include <limits.h>
 #include <errno.h>
 #define ZSTD_STATIC_LINKING_ONLY // ZSTD_FRAMEHEADERSIZE_MAX
 #include <zstd.h>
@@ -201,11 +202,12 @@ void zstdreader_free(struct zstdreader *z)
 
 ssize_t zstdreader_read(struct zstdreader *z, void *buf, size_t size, const char *err[2])
 {
+    assert(size > 0 && size <= SSIZE_MAX);
+
     if (z->err)
 	return ERRSTR("pending error"), -1;
     if (z->eof)
 	return 0;
-    assert(size > 0);
 
     size_t total = 0;
 
